@@ -8,7 +8,7 @@ class InputEmbeddings(nn.Module):
         super().__init__()
         self.d_model = d_model # embedding dimension
         self.vocab_size = vocab_size # vocab size
-        self.embedding = nn.Embedding  (vocab_size, d_model) # embedding layer
+        self.embedding = nn.Embedding(vocab_size, d_model) # embedding layer
 
 #  convert raw token index to embedding
     def forward(self, x): 
@@ -34,7 +34,7 @@ class PositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
+        pe = pe.unsqueeze(0)  # (1, seq_len, d_model) .transpose(0, 1)
 
         # register buffer to store positional encoding 
         self.register_buffer('pe', pe)
@@ -56,12 +56,12 @@ class LayerNormalization(nn.Module):
 
         # aplha(multiplicative factor) and bais(additive factor) are learnable parameters
         self.aplha = nn.Parameter(torch.ones(1))
-        self.bais = nn.Parameter(torch.zeros(1))
+        self.bias = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
-        return self.aplha * (x - mean) / (std + self.eps) + self.bais
+        return self.aplha * (x - mean) / (std + self.eps) + self.bias
     
 # feed forward block is used to forward the input  
 class FeedForwardBlock(nn.Module):
@@ -81,7 +81,7 @@ class FeedForwardBlock(nn.Module):
         self.linear2 = nn.Linear(d_ff, d_model)
 
     def forward(self, x):
-        # (Batch, Len, D_model) -> (Batch, Len, D_ff) -> (Batch, Len, D_model)
+        # (Batch, seq_len, D_model) -> (Batch, seq_len, D_ff) -> (Batch, seq_len, D_model)
         x = self.dropout(torch.relu(self.linear1(x)))
         return self.linear2(x)
     
@@ -92,9 +92,12 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.h = h
+
+        # check if d_model is divisible by h
+        assert d_model % h == 0, "d_model is not divisible by h"
+
         # d_k is the dimension of the key and value
         self.d_k = d_model // h
-        self.dropout = nn.Dropout(dropout)
         # WQ, WK, WV are learnable parameters
         self.w_q = nn.Linear(d_model, d_model)
         self.w_k = nn.Linear(d_model, d_model)
@@ -217,8 +220,6 @@ class Decoder(nn.Module):
 class ProjectionLayer(nn.Module):
     def __init__(self, d_model:int, vocab_size:int):
         super().__init__()
-        self.d_model = d_model
-        self.vocab_size = vocab_size
         self.projection = nn.Linear(d_model, vocab_size)
 
     def forward(self, x):
@@ -308,5 +309,4 @@ def build_transformer(src_vocab_size:int, tgt_vocab_size:int,src_seq_len:int, tg
 
     return transformer
 
-test_transformer = build_transformer(10,10,10,10)
-print(test_transformer)
+
